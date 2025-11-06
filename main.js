@@ -114,7 +114,7 @@ const {
     });
 
     room = await SkyWayRoom.FindOrCreate(context, { 
-      type: "sfu", // SFUモードを使用
+      type: "p2p", // SFUモードを使用
       name: roomName 
     });
     me = await room.join();
