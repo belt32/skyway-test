@@ -1,14 +1,42 @@
-<p>ID: <span id="my-id"></span></p>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SkyWay 汎用テスター</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: sans-serif; padding: 10px; }
+    input { width: 300px; padding: 5px; margin-bottom: 5px; }
+    button { padding: 5px 10px; }
+    video { max-width: 100%; border: 1px solid #ccc; background: #eee; }
+    #remote-media-area { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+    .creds { background: #fff8e1; border: 1px solid #ffc107; padding: 10px; border-radius: 5px; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway_room-latest.js"></script>
+</head>
+<body>
+  <h2>SkyWay 汎用テスター（送信・受信兼用）</h2>
+  
+  <div class="creds">
+    <b>SkyWayキー（必須）</b><br>
+    <!-- ★★★ 新しく発行したキーをここに入力 ★★★ -->
+    <input type="text" id="app-id" placeholder="新しく発行した App ID"><br>
+    <input type="password" id="secret-key" placeholder="新しく発行した Secret Key">
+  </div>
 
-<div>
-  App ID: <input id="app-id" type="text" />
-  Secret Key: <input id="secret-key" type="text" />
-  Room name: <input id="room-name" type="text" />
+  <hr>
+  <h3>ローカル映像 (カメラがある場合)</h3>
+  <video id="local-video" width="300px" autoplay muted playsinline></video>
+  <br>
+  <input type="text" id="room-name" placeholder="ルーム名を入力">
   <button id="join">Join</button>
-</div>
+  <button id="leave">Leave</button>
+  <p>My ID: <span id="my-id"></span></p>
+  <hr>
+  <h3>リモート映像</h3>
+  <div id="remote-media-area"></div>
 
-<video id="local-video" width="400px" muted playsinline></video>
-<div id="remote-media-area"></div>
-
-<script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway_room-latest.js"></script>
-<script type="module" src="main.js"></script>
+  <!-- 修正版の main.js を読み込む -->
+  <script src="main.js"></script>
+</body>
+</html>
