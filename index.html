@@ -1,30 +1,14 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width" />
-  <title>SkyWay Secure WebRTC</title>
-</head>
-<body>
-  <h2>SkyWay Secure WebRTC</h2>
+<p>ID: <span id="my-id"></span></p>
 
-  <p>
-    App ID: <input id="app-id" type="text" style="width:300px"><br>
-    Secret Key: <input id="secret-key" type="text" style="width:300px"><br>
-    Room Name: <input id="room-name" type="text" style="width:200px"><br>
-    <button id="join">Join</button>
-  </p>
+<div>
+  App ID: <input id="app-id" type="text" />
+  Secret Key: <input id="secret-key" type="text" />
+  Room name: <input id="room-name" type="text" />
+  <button id="join">Join</button>
+</div>
 
-  <h3>Local Video</h3>
-  <video id="local-video" width="300" muted playsinline></video>
+<video id="local-video" width="400px" muted playsinline></video>
+<div id="remote-media-area"></div>
 
-  <h3>Remote Video</h3>
-  <div id="remote-media-area"></div>
-
-  <!-- SkyWay SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway_room-latest.js"></script>
-
-  <!-- 自作コード -->
-  <script type="module" src="main.js"></script>
-</body>
-</html>
+<script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway_room-latest.js"></script>
+<script type="module" src="main.js"></script>
