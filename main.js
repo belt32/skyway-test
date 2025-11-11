@@ -1,181 +1,175 @@
+
 // --- SkyWay SDK の取り出し ---
 const {
-  nowInSec,
-  SkyWayAuthToken,
-  SkyWayContext,
-  SkyWayRoom,
-  SkyWayStreamFactory,
-  LocalDataStream, // ★ DataStream をインポート
-  uuidV4,
+  nowInSec,
+  SkyWayAuthToken,
+  SkyWayContext,
+  SkyWayRoom,
+  SkyWayStreamFactory,
+  uuidV4,
 } = skyway_room;
 
 (async () => {
-  const joinBtn = document.getElementById("join");
+  const joinBtn = document.getElementById("join");
   const leaveBtn = document.getElementById("leave");
-  const roomNameInput = document.getElementById("room-name");
-  const appIdInput = document.getElementById("app-id");
-  const secretInput = document.getElementById("secret-key");
+  const roomNameInput = document.getElementById("room-name");
+  const appIdInput = document.getElementById("app-id");
+  const secretInput = document.getElementById("secret-key");
   const myIdSpan = document.getElementById("my-id");
+  const localVideoEl = document.getElementById("local-video"); // HTMLのvideoタグ
+  const remoteArea = document.getElementById("remote-media-area");
 
-  // --- ★ カメラ選択機能（ここから） ★ ---
-  const localVideoEl1 = document.getElementById("local-video-1"); 
-  const localVideoEl2 = document.getElementById("local-video-2");
-  const videoSelect1 = document.getElementById("video-select-1");
-  const videoSelect2 = document.getElementById("video-select-2");
-
-  let localVideo1 = null; 
-  let localVideo2 = null;
-  let localAudio = null;
-  let dataStream = null; // ★ Keep-Alive用
-  let keepAliveInterval = null; // ★ Keep-Alive用
+  let localVideo = null; // 映像ストリーム
+  let localAudio = null; // 音声ストリーム
   let room = null;
   let me = null;
 
-  // 利用可能なカメラデバイスを<select>に追加する
+  // カメラ取得（失敗しても受信専用で動作）
   try {
-    const devices = await SkyWayStreamFactory.enumerateInputVideoDevices();
-    devices.forEach((device) => {
-      const option1 = document.createElement("option");
-      option1.value = device.id;
-      option1.text = device.label || device.id;
-      videoSelect1.appendChild(option1);
-
-      const option2 = document.createElement("option");
-      option2.value = device.id;
-      option2.text = device.label || device.id;
-      videoSelect2.appendChild(option2);
-    });
-
-    // 2台目がある場合は、デフォルトで2台目を選択しておく
-    if (devices.length > 1) {
-      videoSelect2.selectedIndex = 1;
-    }
-    
-    // （音声デバイスも取得しておく）
-    const { audio } = await SkyWayStreamFactory.createMicrophoneAudioStream();
+    const { audio, video } = await SkyWayStreamFactory.createMicrophoneAudioAndCameraStream();
+    localVideo = video;
     localAudio = audio;
-    console.log("✅ Audio device found");
-
+    // ローカルプレビュー
+    localVideo.attach(localVideoEl);
+    await localVideoEl.play();
+    console.log("✅ Camera available, local preview started");
   } catch (err) {
-    console.error("⚠️ Device enumeration failed:", err);
+    console.warn("⚠️ Camera not available, running as receive-only");
   }
-  // --- ★ カメラ選択機能（ここまで） ★ ---
 
+  // --- Subscribe処理（関数として定義）---
+  const subscribeAndAttach = async (publication) => {
+    if (publication.publisher.id === me.id) return; // 自分のは無視
+    if (document.getElementById(`media-${publication.id}`)) return; // 既に表示済み
 
-  joinBtn.onclick = async () => {
-  	const appId = appIdInput.value.trim();
-  	const secret = secretInput.value.trim();
-  	const roomName = roomNameInput.value.trim();
-  	if (!appId || !secret || !roomName) {
-  	  alert("App ID / Secret Key / Room Name をすべて入力してください");
-  	  return;
-  	}
-    if (me) return; 
+    console.log("📡 [Stream Found] 相手のストリームを発見:", publication.id);
 
-  	console.log("🔑 Generating token...");
-  	const token = new SkyWayAuthToken({
-  	  jti: uuidV4(),
-  	  iat: nowInSec(),
-  	  exp: nowInSec() + 60 * 60 * 24, 
-  	  scope: {
-  	 	  appId,
-  	 	  rooms: [ { name: "*", methods: ["create", "close"], member: { name: "*", methods: ["publish", "subscribe"] } } ],
-  	  },
-  	}).encode(secret);
-    
-    console.log("✅ Token created");
-    
-  	console.log("🔌 Connecting (Forcing P2P+Relay)...");
-  	const context = await SkyWayContext.Create(token, {
-  	  iceConfig: { iceTransportPolicy: "relay" }, // TURN強制
-  	});
-
-  	room = await SkyWayRoom.FindOrCreate(context, { 
-      type: "p2p", // P2Pルーム
-      name: roomName 
-    });
-  	me = await room.join();
-    myIdSpan.textContent = me.id;
-  	console.log("✅ Joined:", me.id);
-
-    // --- ★ 選択されたカメラでPublish処理（ここから） ★ ---
     try {
-      // 1台目（RGB）のカメラストリームを生成・Publish
-      const selectedCam1 = videoSelect1.value;
-      if (selectedCam1) {
-        const { video } = await SkyWayStreamFactory.createCameraStream({
-          deviceId: selectedCam1,
-          // SLAM用に 640x480 を強制
-          maxWidth: 640,
-          maxHeight: 480,
-        });
-        localVideo1 = video;
-        localVideo1.attach(localVideoEl1);
-        await localVideoEl1.play();
-        await me.publish(localVideo1);
-        console.log("✅ Video 1 (RGB) published");
-      }
+      console.log(`[Subscribing] ${publication.id} を Subscribeします...`);
+      const { stream } = await me.subscribe(publication);
 
-      // 2台目（サーマル）のカメラストリームを生成・Publish
-      const selectedCam2 = videoSelect2.value;
-      if (selectedCam2 && selectedCam2 !== selectedCam1) {
-        const { video } = await SkyWayStreamFactory.createCameraStream({
-          deviceId: selectedCam2,
-          maxWidth: 640,
-          maxHeight: 480,
-        });
-        localVideo2 = video;
-        localVideo2.attach(localVideoEl2);
-        await localVideoEl2.play();
-        await me.publish(localVideo2);
-        console.log("✅ Video 2 (Thermal) published");
+      let newMedia;
+      switch (stream.track.kind) {
+        case "video":
+          newMedia = document.createElement("video");
+          newMedia.id = `media-${publication.id}`; // 削除できるようにIDを付与
+          newMedia.autoplay = true;
+          newMedia.playsInline = true;
+          break;
+        case "audio":
+          newMedia = document.createElement("audio");
+          newMedia.id = `media-${publication.id}`;
+          newMedia.autoplay = true;
+          newMedia.controls = true;
+          break;
+        default:
+          return;
       }
-
-      // 音声もPublish
-      if (localAudio) { 
-        await me.publish(localAudio);
-        console.log("✅ Audio published"); 
-      }
-
-      // --- ★ キープアライブ（30秒タイムアウト対策） ★ ---
-      dataStream = new LocalDataStream();
-      await me.publish(dataStream);
-      console.log("✅ Keep-Alive DataStream published");
-      
-      let count = 0;
-      keepAliveInterval = setInterval(() => {
-        if (dataStream && me) {
-            const msg = `KeepAlive Ping ${count++}`;
-            dataStream.write(msg);
-            console.log(`PING > ${msg}`);
-        }
-      }, 10000); // 10秒ごとにPingを送信
-      // --- ★ キープアライブ（ここまで） ★ ---
+      stream.attach(newMedia);
+      remoteArea.appendChild(newMedia);
+      console.log("✅ [Attached] リモートストリームを画面に表示しました");
 
     } catch (err) {
-      console.error("🔥 Publish failed:", err);
+      console.error(`[Subscribe Error] ${publication.id} のSubscribeに失敗:`, err);
     }
-    // --- ★ Publish処理（ここまで） ★ ---
   };
 
-  leaveBtn.onclick = async () => {
-    if (!me) return;
+  // --- 退出時のストリーム削除処理 ---
+  const removeRemoteStream = (publication) => {
+    const media = document.getElementById(`media-${publication.id}`);
+    if (media) {
+        media.srcObject = null;
+        media.remove();
+        console.log(`[Removed] ${publication.id} を削除`);
+    }
+  };
 
-    // ★ Keep-Aliveを停止
-    if (keepAliveInterval) {
-      clearInterval(keepAliveInterval);
-      keepAliveInterval = null;
+
+  joinBtn.onclick = async () => {
+    const appId = appIdInput.value.trim();
+    const secret = secretInput.value.trim();
+    const roomName = roomNameInput.value.trim();
+
+    if (!appId || !secret || !roomName) {
+      alert("App ID / Secret Key / Room Name をすべて入力してください");
+      return;
+    }
+    if (me) return; // 既に入室済み
+
+    console.log("🔑 Generating token...");
+    const token = new SkyWayAuthToken({
+      jti: uuidV4(),
+      iat: nowInSec(),
+      exp: nowInSec() + 60 * 60 * 24,
+      version: 3,
+      scope: {
+        appId,
+        rooms: [ { name: "*", methods: ["create", "close"], member: { name: "*", methods: ["publish", "subscribe"] } } ],
+      },
+    }).encode(secret);
+    console.log("✅ Token created");
+
+    console.log("🔌 Connecting...");
+    const context = await SkyWayContext.Create(token, {
+      iceConfig: { iceTransportPolicy: "relay" }, // TURN強制 (P2P失敗対策)
+    });
+
+    room = await SkyWayRoom.FindOrCreate(context, { 
+      type: "p2p", // SFUモードを使用
+      name: roomName 
+    });
+    me = await room.join();
+    myIdSpan.textContent = me.id;
+    console.log("✅ Joined:", me.id);
+
+    // カメラがある場合のみ Publish
+    if (localVideo) {
+      await me.publish(localAudio);
+      await me.publish(localVideo);
+      console.log("✅ Video/Audio published");
     }
 
+    // ★★★ 受信漏れ対策 ★★★
+    // --- 既存ストリームのチェック ---
+    console.log("--- 既存ストリームをチェックします ---");
+    room.publications.forEach((publication) => {
+        subscribeAndAttach(publication);
+    });
+    // ★★★ 対策ここまで ★★★
+
+    // 他の参加者の映像受信
+    room.onStreamPublished.add(async (e) => {
+      subscribeAndAttach(e.publication);
+    });
+
+    // 退出時に映像を削除
+    room.onStreamUnpublished.add((e) => {
+      removeRemoteStream(e.publication);
+    });
+    // メンバーが退出した時も映像を削除
+    room.onMemberLeft.add((e) => {
+        room.publications.forEach(pub => {
+            if (pub.publisher.id === e.member.id) {
+                removeRemoteStream(pub);
+            }
+        });
+    });
+  };
+
+  // --- 退出ボタンの処理 ---
+  leaveBtn.onclick = async () => {
+    if (!me) return;
     try {
       await me.leave();
       await room.dispose();
       myIdSpan.textContent = '';
-      room = null; me = null;
+      remoteArea.innerHTML = '';
+      room = null;
+      me = null;
       console.log('🏃 Left room');
     } catch (err) {
       console.error('退出処理に失敗:', err);
     }
   };
-  
-})(); // <-- ★★★ この最後の行 `})();` が欠けていませんか？ ★★★
+
+})();
