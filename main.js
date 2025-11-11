@@ -156,7 +156,7 @@ const {
       console.error("🔥 Publish failed:", err);
     }
     // --- ★ Publish処理（ここまで） ★ ---
-F  };
+  };
 
   leaveBtn.onclick = async () => {
     if (!me) return;
