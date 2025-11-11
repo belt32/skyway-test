@@ -1,29 +1,29 @@
 // --- SkyWay SDK の取り出し ---
 const {
-  nowInSec,
-  SkyWayAuthToken,
-  SkyWayContext,
-  SkyWayRoom,
-  SkyWayStreamFactory,
+  nowInSec,
+  SkyWayAuthToken,
+  SkyWayContext,
+  SkyWayRoom,
+  SkyWayStreamFactory,
   LocalDataStream, // ★ DataStream をインポート
-  uuidV4,
+  uuidV4,
 } = skyway_room;
 
 (async () => {
-  const joinBtn = document.getElementById("join");
+  const joinBtn = document.getElementById("join");
   const leaveBtn = document.getElementById("leave");
-  const roomNameInput = document.getElementById("room-name");
-  const appIdInput = document.getElementById("app-id");
-  const secretInput = document.getElementById("secret-key");
+  const roomNameInput = document.getElementById("room-name");
+  const appIdInput = document.getElementById("app-id");
+  const secretInput = document.getElementById("secret-key");
   const myIdSpan = document.getElementById("my-id");
 
   // --- ★ カメラ選択機能（ここから） ★ ---
-  const localVideoEl1 = document.getElementById("local-video-1");
-  const localVideoEl2 = document.getElementById("local-video-2");
+  const localVideoEl1 = document.getElementById("local-video-1"); 
+  const localVideoEl2 = document.getElementById("local-video-2");
   const videoSelect1 = document.getElementById("video-select-1");
   const videoSelect2 = document.getElementById("video-select-2");
 
-  let localVideo1 = null;
+  let localVideo1 = null; 
   let localVideo2 = null;
   let localAudio = null;
   let dataStream = null; // ★ Keep-Alive用
@@ -50,58 +50,53 @@ const {
     if (devices.length > 1) {
       videoSelect2.selectedIndex = 1;
     }
-
+    
     // （音声デバイスも取得しておく）
     const { audio } = await SkyWayStreamFactory.createMicrophoneAudioStream();
     localAudio = audio;
     console.log("✅ Audio device found");
+
   } catch (err) {
     console.error("⚠️ Device enumeration failed:", err);
   }
   // --- ★ カメラ選択機能（ここまで） ★ ---
 
 
-  joinBtn.onclick = async () => {
-    const appId = appIdInput.value.trim();
-    const secret = secretInput.value.trim();
-    const roomName = roomNameInput.value.trim();
-    if (!appId || !secret || !roomName) {
-      alert("App ID / Secret Key / Room Name をすべて入力してください");
-      return;
-    }
-    if (me) return;
+  joinBtn.onclick = async () => {
+  	const appId = appIdInput.value.trim();
+  	const secret = secretInput.value.trim();
+  	const roomName = roomNameInput.value.trim();
+  	if (!appId || !secret || !roomName) {
+  	  alert("App ID / Secret Key / Room Name をすべて入力してください");
+  	  return;
+  	}
+    if (me) return; 
 
-    console.log("🔑 Generating token...");
-    const token = new SkyWayAuthToken({
-      jti: uuidV4(),
-      iat: nowInSec(),
-      exp: nowInSec() + 60 * 60 * 24,
-      scope: {
-        appId,
-        rooms: [
-          {
-            name: "*",
-            methods: ["create", "close"],
-            member: { name: "*", methods: ["publish", "subscribe"] },
-          },
-        ],
-      },
-    }).encode(secret);
-
+  	console.log("🔑 Generating token...");
+  	const token = new SkyWayAuthToken({
+  	  jti: uuidV4(),
+  	  iat: nowInSec(),
+  	  exp: nowInSec() + 60 * 60 * 24, 
+  	  scope: {
+  	 	  appId,
+  	 	  rooms: [ { name: "*", methods: ["create", "close"], member: { name: "*", methods: ["publish", "subscribe"] } } ],
+  	  },
+  	}).encode(secret);
+    
     console.log("✅ Token created");
+    
+  	console.log("🔌 Connecting (Forcing P2P+Relay)...");
+  	const context = await SkyWayContext.Create(token, {
+  	  iceConfig: { iceTransportPolicy: "relay" }, // TURN強制
+  	});
 
-    console.log("🔌 Connecting (Forcing P2P+Relay)...");
-    const context = await SkyWayContext.Create(token, {
-      iceConfig: { iceTransportPolicy: "relay" }, // TURN強制
-    });
-
-    room = await SkyWayRoom.FindOrCreate(context, {
+  	room = await SkyWayRoom.FindOrCreate(context, { 
       type: "p2p", // P2Pルーム
-      name: roomName,
+      name: roomName 
     });
-    me = await room.join();
+  	me = await room.join();
     myIdSpan.textContent = me.id;
-    console.log("✅ Joined:", me.id);
+  	console.log("✅ Joined:", me.id);
 
     // --- ★ 選択されたカメラでPublish処理（ここから） ★ ---
     try {
@@ -137,25 +132,26 @@ const {
       }
 
       // 音声もPublish
-      if (localAudio) {
+      if (localAudio) { 
         await me.publish(localAudio);
-        console.log("✅ Audio published");
+        console.log("✅ Audio published"); 
       }
 
       // --- ★ キープアライブ（30秒タイムアウト対策） ★ ---
       dataStream = new LocalDataStream();
       await me.publish(dataStream);
       console.log("✅ Keep-Alive DataStream published");
-
+      
       let count = 0;
       keepAliveInterval = setInterval(() => {
         if (dataStream && me) {
-          const msg = `KeepAlive Ping ${count++}`;
-          dataStream.write(msg);
-          console.log(`PING > ${msg}`);
+            const msg = `KeepAlive Ping ${count++}`;
+            dataStream.write(msg);
+            console.log(`PING > ${msg}`);
         }
       }, 10000); // 10秒ごとにPingを送信
       // --- ★ キープアライブ（ここまで） ★ ---
+
     } catch (err) {
       console.error("🔥 Publish failed:", err);
     }
@@ -174,12 +170,12 @@ const {
     try {
       await me.leave();
       await room.dispose();
-      myIdSpan.textContent = "";
-      room = null;
-      me = null;
-      console.log("🏃 Left room");
+      myIdSpan.textContent = '';
+      room = null; me = null;
+      console.log('🏃 Left room');
     } catch (err) {
-      console.error("退出処理に失敗:", err);
+      console.error('退出処理に失敗:', err);
     }
   };
-})(); // IIFE を正しく閉じる
+  
+})(); // <-- ★★★ この最後の行 `})();` が欠けていませんか？ ★★★
