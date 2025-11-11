@@ -5,7 +5,7 @@ const {
   SkyWayContext,
   SkyWayRoom,
   SkyWayStreamFactory,
-  LocalDataStream,
+  LocalDataStream, // ★ DataStream をインポート
   uuidV4,
 } = skyway_room;
 
@@ -17,7 +17,7 @@ const {
   const secretInput = document.getElementById("secret-key");
   const myIdSpan = document.getElementById("my-id");
 
-  // --- カメラ UI 要素 ---
+  // --- ★ カメラ選択機能（ここから） ★ ---
   const localVideoEl1 = document.getElementById("local-video-1");
   const localVideoEl2 = document.getElementById("local-video-2");
   const videoSelect1 = document.getElementById("video-select-1");
@@ -26,60 +26,50 @@ const {
   let localVideo1 = null;
   let localVideo2 = null;
   let localAudio = null;
-
-  let dataStream = null;
-  let keepAliveInterval = null;
-
+  let dataStream = null; // ★ Keep-Alive用
+  let keepAliveInterval = null; // ★ Keep-Alive用
   let room = null;
   let me = null;
 
-  // ============================================================
-  // ✅ 利用可能なデバイスを列挙
-  // ============================================================
+  // 利用可能なカメラデバイスを<select>に追加する
   try {
-    const cameras = await SkyWayStreamFactory.enumerateInputVideoDevices();
+    const devices = await SkyWayStreamFactory.enumerateInputVideoDevices();
+    devices.forEach((device) => {
+      const option1 = document.createElement("option");
+      option1.value = device.id;
+      option1.text = device.label || device.id;
+      videoSelect1.appendChild(option1);
 
-    cameras.forEach((cam) => {
-      const opt1 = document.createElement("option");
-      opt1.value = cam.id;
-      opt1.text = cam.label || cam.id;
-      videoSelect1.appendChild(opt1);
-
-      const opt2 = document.createElement("option");
-      opt2.value = cam.id;
-      opt2.text = cam.label || cam.id;
-      videoSelect2.appendChild(opt2);
+      const option2 = document.createElement("option");
+      option2.value = device.id;
+      option2.text = device.label || device.id;
+      videoSelect2.appendChild(option2);
     });
 
-    if (cameras.length > 1) {
+    // 2台目がある場合は、デフォルトで2台目を選択しておく
+    if (devices.length > 1) {
       videoSelect2.selectedIndex = 1;
     }
 
-    // 音声デバイスも確保しておく
-    try {
-      const { audio } = await SkyWayStreamFactory.createMicrophoneAudioStream();
-      localAudio = audio;
-      console.log("✅ Audio device ready");
-    } catch (err) {
-      console.warn("⚠️ Audio device not available:", err);
-    }
+    // （音声デバイスも取得しておく）
+    const { audio } = await SkyWayStreamFactory.createMicrophoneAudioStream();
+    localAudio = audio;
+    console.log("✅ Audio device found");
   } catch (err) {
     console.error("⚠️ Device enumeration failed:", err);
   }
+  // --- ★ カメラ選択機能（ここまで） ★ ---
 
-  // ============================================================
-  // ✅ 参加ボタン
-  // ============================================================
+
   joinBtn.onclick = async () => {
     const appId = appIdInput.value.trim();
     const secret = secretInput.value.trim();
     const roomName = roomNameInput.value.trim();
-
     if (!appId || !secret || !roomName) {
       alert("App ID / Secret Key / Room Name をすべて入力してください");
       return;
     }
-    if (me) return; // 多重参加禁止
+    if (me) return;
 
     console.log("🔑 Generating token...");
     const token = new SkyWayAuthToken({
@@ -100,30 +90,27 @@ const {
 
     console.log("✅ Token created");
 
-    // TURN (relay) のみ強制
-    console.log("🔌 Connecting (relay only)...");
+    console.log("🔌 Connecting (Forcing P2P+Relay)...");
     const context = await SkyWayContext.Create(token, {
-      iceConfig: { iceTransportPolicy: "relay" },
+      iceConfig: { iceTransportPolicy: "relay" }, // TURN強制
     });
 
     room = await SkyWayRoom.FindOrCreate(context, {
-      type: "p2p",
+      type: "p2p", // P2Pルーム
       name: roomName,
     });
-
     me = await room.join();
     myIdSpan.textContent = me.id;
     console.log("✅ Joined:", me.id);
 
-    // ============================================================
-    // ✅ カメラ Publish
-    // ============================================================
+    // --- ★ 選択されたカメラでPublish処理（ここから） ★ ---
     try {
-      // ---- 1台目 ----
-      const cam1 = videoSelect1.value;
-      if (cam1) {
+      // 1台目（RGB）のカメラストリームを生成・Publish
+      const selectedCam1 = videoSelect1.value;
+      if (selectedCam1) {
         const { video } = await SkyWayStreamFactory.createCameraStream({
-          deviceId: cam1,
+          deviceId: selectedCam1,
+          // SLAM用に 640x480 を強制
           maxWidth: 640,
           maxHeight: 480,
         });
@@ -131,14 +118,14 @@ const {
         localVideo1.attach(localVideoEl1);
         await localVideoEl1.play();
         await me.publish(localVideo1);
-        console.log("✅ Video1 published:", cam1);
+        console.log("✅ Video 1 (RGB) published");
       }
 
-      // ---- 2台目 ----
-      const cam2 = videoSelect2.value;
-      if (cam2 && cam2 !== cam1) {
+      // 2台目（サーマル）のカメラストリームを生成・Publish
+      const selectedCam2 = videoSelect2.value;
+      if (selectedCam2 && selectedCam2 !== selectedCam1) {
         const { video } = await SkyWayStreamFactory.createCameraStream({
-          deviceId: cam2,
+          deviceId: selectedCam2,
           maxWidth: 640,
           maxHeight: 480,
         });
@@ -146,60 +133,39 @@ const {
         localVideo2.attach(localVideoEl2);
         await localVideoEl2.play();
         await me.publish(localVideo2);
-        console.log("✅ Video2 published:", cam2);
+        console.log("✅ Video 2 (Thermal) published");
       }
 
-      // ---- 音声 ----
+      // 音声もPublish
       if (localAudio) {
         await me.publish(localAudio);
         console.log("✅ Audio published");
       }
 
-      // ============================================================
-      // ✅ KeepAlive（SFU/P2P 30秒切断対策）
-      // ============================================================
+      // --- ★ キープアライブ（30秒タイムアウト対策） ★ ---
       dataStream = new LocalDataStream();
       await me.publish(dataStream);
-      console.log("✅ KeepAlive stream published");
+      console.log("✅ Keep-Alive DataStream published");
 
-      let pingID = 0;
+      let count = 0;
       keepAliveInterval = setInterval(() => {
         if (dataStream && me) {
-          dataStream.write("ping " + pingID++);
-          console.log("PING:", pingID);
+          const msg = `KeepAlive Ping ${count++}`;
+          dataStream.write(msg);
+          console.log(`PING > ${msg}`);
         }
-      }, 10000);
+      }, 10000); // 10秒ごとにPingを送信
+      // --- ★ キープアライブ（ここまで） ★ ---
     } catch (err) {
       console.error("🔥 Publish failed:", err);
     }
-
-    // ============================================================
-    // ✅ リモート映像の受信
-    // ============================================================
-    room.onStreamPublished.add(async (e) => {
-      if (e.publication.publisher.id === me.id) return;
-
-      console.log("📡 Incoming stream:", e.publication.id);
-
-      const { stream } = await me.subscribe(e.publication);
-
-      if (stream.track.kind === "video") {
-        const vid = document.createElement("video");
-        vid.autoplay = true;
-        vid.playsInline = true;
-        stream.attach(vid);
-        document.getElementById("remote-media-area").appendChild(vid);
-        console.log("✅ Remote video attached");
-      }
-    });
+    // --- ★ Publish処理（ここまで） ★ ---
   };
 
-  // ============================================================
-  // ✅ 退出ボタン
-  // ============================================================
   leaveBtn.onclick = async () => {
     if (!me) return;
 
+    // ★ Keep-Aliveを停止
     if (keepAliveInterval) {
       clearInterval(keepAliveInterval);
       keepAliveInterval = null;
@@ -213,7 +179,7 @@ const {
       me = null;
       console.log("🏃 Left room");
     } catch (err) {
-      console.error("退出失敗:", err);
+      console.error("退出処理に失敗:", err);
     }
   };
-})();    // ✅ ←←← IIFE を正しく閉じる
+})(); // IIFE を正しく閉じる
