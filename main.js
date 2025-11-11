@@ -138,7 +138,7 @@ const {
       }
 
       // --- ★ キープアライブ（30秒タイムアウト対策） ★ ---
-      dataStream = new LocalDataStream(); // ★ new LocalDataStream() に修正
+      dataStream = new LocalDataStream();
       await me.publish(dataStream);
       console.log("✅ Keep-Alive DataStream published");
       
@@ -156,7 +156,7 @@ const {
       console.error("🔥 Publish failed:", err);
     }
     // --- ★ Publish処理（ここまで） ★ ---
-  };
+F  };
 
   leaveBtn.onclick = async () => {
     if (!me) return;
@@ -177,5 +177,5 @@ const {
       console.error('退出処理に失敗:', err);
     }
   };
-})();
-```eof
+  
+})(); // <-- ★★★ この最後の行 `})();` が欠けていませんか？ ★★★
